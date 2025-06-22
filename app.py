@@ -6,13 +6,13 @@ import joblib
 app = Flask(__name__)
 CORS(app)
 
-# Load trained model components
+# Load model components
 model = joblib.load("model.joblib")
 scaler = joblib.load("scaler.joblib")
 encoder = joblib.load("encoder.joblib")
-model_features = joblib.load("model_features.joblib")  # ['vehicle_age', 'km_driven', ..., 'seller_type']
+model_features = joblib.load("model_features.joblib")
 
-# Define categorical columns (must match those used in training)
+# Columns that were encoded during training
 categorical_cols = ['brand', 'fuel_type', 'transmission_type', 'seller_type']
 
 @app.route("/")
@@ -22,17 +22,17 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        # Step 1: Load input
+        # Step 1: Load input JSON
         input_data = request.get_json()
         df = pd.DataFrame([input_data])
 
-        # Step 2: Reorder columns to match expected order
-        df = df[model_features]  # Important to maintain same order
-
-        # Step 3: Encode categorical columns using same encoder
+        # Step 2: Encode categorical features
         df[categorical_cols] = encoder.transform(df[categorical_cols])
 
-        # Step 4: Scale all features
+        # Step 3: Ensure column order matches training
+        df = df[model_features]
+
+        # Step 4: Scale features
         X_scaled = scaler.transform(df)
 
         # Step 5: Predict
