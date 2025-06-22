@@ -6,12 +6,12 @@ import joblib
 app = Flask(__name__)
 CORS(app)
 
-# Load model, scaler, and encoder
+# Load model, scaler, encoder, and model feature list
 model = joblib.load("model.joblib")
 scaler = joblib.load("scaler.joblib")
 encoder = joblib.load("encoder.joblib")
+model_features = joblib.load("model_features.joblib")
 
-# Categorical columns encoded during training
 categorical_cols = ['brand', 'fuel_type', 'transmission_type', 'seller_type']
 
 @app.route('/')
@@ -21,17 +21,24 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # 1. Get input JSON
         input_data = request.get_json()
         df = pd.DataFrame([input_data])
 
-        # 2. Encode categorical columns
+        # 1. Encode categorical values
         df[categorical_cols] = encoder.transform(df[categorical_cols])
 
-        # 3. Scale all features
+        # 2. Add any missing columns
+        for col in model_features:
+            if col not in df.columns:
+                df[col] = 0
+
+        # 3. Reorder columns to match model training
+        df = df[model_features]
+
+        # 4. Scale
         X_scaled = scaler.transform(df)
 
-        # 4. Predict
+        # 5. Predict
         prediction = model.predict(X_scaled)[0]
         return jsonify({"predicted_price": round(prediction, 2)})
 
