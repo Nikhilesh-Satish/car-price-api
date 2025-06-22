@@ -3,27 +3,26 @@ from flask_cors import CORS
 import pandas as pd
 import joblib
 
-# Initialize app
 app = Flask(__name__)
 CORS(app)
 
-# Load model and scaler
+# Load trained model and scaler
 model = joblib.load("model.joblib")
 scaler = joblib.load("scaler.joblib")
 
-# Model was trained on these features — update this list based on training
+# Manually defined feature list from training (must match one-hot structure)
 model_features = [
-    'vehicle_age', 'km_driven', 'mileage', 'engine', 'max_power', 'seats', 'seller_type',
-    # One-hot encoded brand (drop_first=True)
-    'brand_BMW', 'brand_Ford', 'brand_Honda', 'brand_Hyundai', 'brand_Maruti', 'brand_Tata', 'brand_Toyota',
-    # One-hot encoded fuel type (drop_first=True)
+    'vehicle_age', 'km_driven', 'mileage', 'engine', 'max_power', 'seats',
+    'brand_BMW', 'brand_Bentley', 'brand_Datsun', 'brand_Force', 'brand_Ford',
+    'brand_Honda', 'brand_Hyundai', 'brand_ISUZU', 'brand_Isuzu', 'brand_Jaguar',
+    'brand_Jeep', 'brand_Kia', 'brand_Land_Rover', 'brand_Lexus', 'brand_MG',
+    'brand_Mahindra', 'brand_Maruti', 'brand_Maserati', 'brand_Mercedes_AMG',
+    'brand_Mercedes_Benz', 'brand_Mini', 'brand_Nissan', 'brand_Porsche',
+    'brand_Renault', 'brand_Skoda', 'brand_Tata', 'brand_Toyota',
+    'brand_Volkswagen', 'brand_Volvo',
     'fuel_type_Diesel', 'fuel_type_Electric', 'fuel_type_LPG', 'fuel_type_Petrol',
-    # One-hot encoded transmission (drop_first=True)
-    'transmission_type_Manual'
+    'transmission_type_Manual', 'seller_type_Dealer', 'seller_type_Individual'
 ]
-
-# Define which features to one-hot encode
-categorical_cols = ['brand', 'fuel_type', 'transmission_type']
 
 @app.route('/')
 def home():
@@ -32,30 +31,29 @@ def home():
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # 1. Receive JSON input
         input_data = request.get_json()
-
-        # 2. Convert input to DataFrame
         df = pd.DataFrame([input_data])
 
-        # 3. One-hot encode categorical columns (drop_first=True to match training)
-        df_encoded = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+        # Sanitize special characters for dummy variable compatibility
+        df.columns = df.columns.str.replace("-", "_").str.replace(" ", "_")
 
-        # 4. Ensure all expected features are present
+        # One-hot encode categorical features
+        categorical_cols = ['brand', 'fuel_type', 'transmission_type', 'seller_type']
+        df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+
+        # Ensure all required model features exist
         for col in model_features:
-            if col not in df_encoded.columns:
-                df_encoded[col] = 0  # Add missing column with 0
+            if col not in df.columns:
+                df[col] = 0
 
-        # 5. Ensure correct column order
-        df_encoded = df_encoded[model_features]
+        # Reorder to match model
+        df = df[model_features]
 
-        # 6. Scale input features
-        X_scaled = scaler.transform(df_encoded)
+        # Scale numerical inputs
+        X_scaled = scaler.transform(df)
 
-        # 7. Predict
+        # Predict and return result
         prediction = model.predict(X_scaled)[0]
-
-        # 8. Return result
         return jsonify({"predicted_price": round(prediction, 2)})
 
     except Exception as e:
